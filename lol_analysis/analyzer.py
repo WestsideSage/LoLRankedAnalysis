@@ -746,6 +746,140 @@ class MatchAnalyzer:
 
         return strengths, weaknesses
 
+    # ── Arena Analysis ─────────────────────────────────────────────────
+
+    def analyze_arena(
+        self,
+        puuid: str,
+        match_count: int = 30,
+        display_name: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Run analysis for Arena (2v2v2v2) games."""
+        matches = self.api_client.get_recent_matches(puuid, match_count, queue=1700)
+
+        games_parsed = 0
+        placements = []
+        all_kills, all_deaths, all_assists = [], [], []
+        all_damage = []
+        champion_stats: Dict[str, Dict] = defaultdict(lambda: {
+            'games': 0, 'placements': [],
+            'kills': [], 'deaths': [], 'assists': [],
+            'damage': [],
+        })
+        recent_performance = []
+
+        for match in matches:
+            player = self._find_player(match, puuid)
+            if not player:
+                continue
+
+            info = match['info']
+            duration_min = info['gameDuration'] / 60
+            if duration_min < 2:
+                continue
+
+            games_parsed += 1
+            placement = player.get('placement', player.get('subteamPlacement', 8))
+            kills = player['kills']
+            deaths = player['deaths']
+            assists = player['assists']
+            damage = player['totalDamageDealtToChampions']
+            champion = player['championName']
+
+            placements.append(placement)
+            all_kills.append(kills)
+            all_deaths.append(deaths)
+            all_assists.append(assists)
+            all_damage.append(damage)
+
+            cs_entry = champion_stats[champion]
+            cs_entry['games'] += 1
+            cs_entry['placements'].append(placement)
+            cs_entry['kills'].append(kills)
+            cs_entry['deaths'].append(deaths)
+            cs_entry['assists'].append(assists)
+            cs_entry['damage'].append(damage)
+
+            recent_performance.append({
+                'champion': champion,
+                'placement': placement,
+                'kda': f"{kills}/{deaths}/{assists}",
+                'damage': damage,
+                'duration_minutes': round(duration_min, 1),
+            })
+
+        def avg(lst):
+            return round(statistics.mean(lst), 1) if lst else 0
+
+        avg_placement = avg(placements)
+        top4_count = sum(1 for p in placements if p <= 4)
+        top4_rate = round((top4_count / games_parsed) * 100, 1) if games_parsed else 0
+        first_count = sum(1 for p in placements if p == 1)
+        first_rate = round((first_count / games_parsed) * 100, 1) if games_parsed else 0
+
+        champion_summary = {}
+        for champ, st in champion_stats.items():
+            g = st['games']
+            champion_summary[champ] = {
+                'games': g,
+                'avg_placement': avg(st['placements']),
+                'top4_rate': round(sum(1 for p in st['placements'] if p <= 4) / g * 100, 1) if g else 0,
+                'avg_kills': avg(st['kills']),
+                'avg_deaths': avg(st['deaths']),
+                'avg_assists': avg(st['assists']),
+                'avg_damage': round(statistics.mean(st['damage'])) if st['damage'] else 0,
+            }
+
+        # Strengths/weaknesses
+        strengths, weaknesses = [], []
+        if avg_placement <= 3.5 and games_parsed >= 5:
+            strengths.append(f"Strong avg placement ({avg_placement}) - consistently finishing high")
+        elif avg_placement >= 5.5 and games_parsed >= 5:
+            weaknesses.append(f"Avg placement is {avg_placement} - finishing in bottom half too often")
+
+        if top4_rate >= 60:
+            strengths.append(f"Top 4 in {top4_rate}% of games - solid consistency")
+        elif top4_rate < 40 and games_parsed >= 5:
+            weaknesses.append(f"Only top 4 in {top4_rate}% of games")
+
+        if first_count >= 2:
+            strengths.append(f"{first_count} first-place finishes")
+
+        if champion_summary:
+            qualified = {c: s for c, s in champion_summary.items() if s['games'] >= 2}
+            if qualified:
+                best = min(qualified.items(), key=lambda x: x[1]['avg_placement'])
+                if best[1]['avg_placement'] <= 3.0:
+                    strengths.append(f"Strong on {best[0]} (avg {best[1]['avg_placement']} placement, {best[1]['games']} games)")
+
+        avg_deaths_val = avg(all_deaths)
+        if avg_deaths_val >= 8:
+            weaknesses.append(f"Averaging {avg_deaths_val} deaths/game - dying too much in rounds")
+        elif avg_deaths_val <= 3:
+            strengths.append(f"Low deaths ({avg_deaths_val}/game) - great round survival")
+
+        return {
+            'mode': 'Arena',
+            'display_name': display_name or 'Unknown',
+            'total_matches': games_parsed,
+            'avg_placement': avg_placement,
+            'top4_rate': top4_rate,
+            'top4_count': top4_count,
+            'first_count': first_count,
+            'first_rate': first_rate,
+            'average_kda': {
+                'kills': avg(all_kills),
+                'deaths': avg_deaths_val,
+                'assists': avg(all_assists),
+                'ratio': round((avg(all_kills) + avg(all_assists)) / max(avg_deaths_val, 0.1), 2),
+            },
+            'avg_damage': round(statistics.mean(all_damage)) if all_damage else 0,
+            'champion_stats': champion_summary,
+            'recent_performance': recent_performance[:15],
+            'strengths': strengths,
+            'weaknesses': weaknesses,
+        }
+
     # ── Champion recommendations ──────────────────────────────────────
 
     def get_champion_recommendations(
