@@ -44,3 +44,7 @@ logs/
 # Data files
 data/
 cache/
+
+# Node.js
+node_modules/
+dashboard/dist/
