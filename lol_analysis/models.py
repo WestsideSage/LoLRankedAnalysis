@@ -2,108 +2,62 @@
 Data models for League of Legends API responses
 """
 from dataclasses import dataclass
-from typing import List, Optional
-from dataclasses_json import dataclass_json
+from typing import Optional
 
 
-@dataclass_json
+@dataclass
+class RiotAccount:
+    """Represents a Riot Games account (from Account v1 API)"""
+    puuid: str
+    game_name: str
+    tag_line: str
+
+    @classmethod
+    def from_dict(cls, data: dict) -> 'RiotAccount':
+        return cls(
+            puuid=data['puuid'],
+            game_name=data['gameName'],
+            tag_line=data['tagLine'],
+        )
+
+
 @dataclass
 class Summoner:
-    """Represents a League of Legends summoner"""
-    id: str
-    accountId: str
+    """Represents a League of Legends summoner (from Summoner v4 API)"""
     puuid: str
-    name: str
-    profileIconId: int
-    revisionDate: int
-    summonerLevel: int
+    profile_icon_id: int
+    revision_date: int
+    summoner_level: int
+
+    @classmethod
+    def from_dict(cls, data: dict) -> 'Summoner':
+        return cls(
+            puuid=data['puuid'],
+            profile_icon_id=data['profileIconId'],
+            revision_date=data['revisionDate'],
+            summoner_level=data['summonerLevel'],
+        )
 
 
-@dataclass_json
-@dataclass
-class MatchParticipant:
-    """Represents a participant in a match"""
-    championName: str
-    championId: int
-    summonerId: str
-    summonerName: str
-    teamId: int
-    win: bool
-    kills: int
-    deaths: int
-    assists: int
-    totalDamageDealtToChampions: int
-    totalMinionsKilled: int
-    goldEarned: int
-    visionScore: int
-    item0: int
-    item1: int
-    item2: int
-    item3: int
-    item4: int
-    item5: int
-    item6: int
-
-
-@dataclass_json
-@dataclass
-class MatchTeam:
-    """Represents a team in a match"""
-    teamId: int
-    win: bool
-    firstBlood: bool
-    firstTower: bool
-    firstInhibitor: bool
-    firstRiftHerald: bool
-    firstBaron: bool
-    firstDragon: bool
-    dragonKills: int
-    baronKills: int
-    riftHeraldKills: int
-    inhibitorKills: int
-    towerKills: int
-
-
-@dataclass_json
-@dataclass
-class MatchInfo:
-    """Represents match information"""
-    gameId: int
-    gameCreation: int
-    gameDuration: int
-    gameMode: str
-    gameType: str
-    gameVersion: str
-    mapId: int
-    platformId: str
-    queueId: int
-    seasonId: int
-    participants: List[MatchParticipant]
-    teams: List[MatchTeam]
-
-
-@dataclass_json
-@dataclass
-class Match:
-    """Represents a complete match"""
-    metadata: dict
-    info: MatchInfo
-
-
-@dataclass_json
 @dataclass
 class RankEntry:
     """Represents a ranked league entry"""
-    leagueId: str
-    summonerId: str
-    summonerName: str
-    queueType: str
+    queue_type: str
     tier: str
     rank: str
-    leaguePoints: int
+    league_points: int
     wins: int
     losses: int
-    hotStreak: bool
-    veteran: bool
-    freshBlood: bool
-    inactive: bool
+    hot_streak: bool
+
+    @classmethod
+    def from_dict(cls, data: dict) -> 'RankEntry':
+        return cls(
+            queue_type=data['queueType'],
+            tier=data['tier'],
+            rank=data['rank'],
+            league_points=data['leaguePoints'],
+            wins=data['wins'],
+            losses=data['losses'],
+            hot_streak=data.get('hotStreak', False),
+        )
